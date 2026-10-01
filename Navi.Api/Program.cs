@@ -17,7 +17,7 @@ builder.Services.AddSwaggerGen();
 // Registramos los servicios en memoria
 builder.Services.AddSingleton<IChatService, InMemoryChatService>();
 builder.Services.AddSingleton<IRagService, InMemoryRagService>();
-
+builder.Services.AddSingleton<ILlmService, InMemoryLlmService>(); 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
