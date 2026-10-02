@@ -1,10 +1,15 @@
 using Navi.Application.Interfaces;
+using Navi.Infrastructure.Configurations;
 using Navi.Infrastructure.Services;
 
 
 
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configuración de MongoDB desde appsettings.json
+builder.Services.Configure<MongoDbSettings>(
+    builder.Configuration.GetSection("MongoDbSettings"));
 
 // Add services to the container.
 
