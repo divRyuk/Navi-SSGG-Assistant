@@ -18,7 +18,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<IDocumentProcessorService, PdfDocumentProcessorService>();
-
+builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>();
 
 // Registramos los servicios en memoria
 builder.Services.AddSingleton<IChatService, InMemoryChatService>();

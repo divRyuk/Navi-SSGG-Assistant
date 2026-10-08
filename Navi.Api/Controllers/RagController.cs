@@ -11,16 +11,18 @@ public class RagController : ControllerBase
 {
     private readonly IRagService _ragService;
     private readonly IDocumentProcessorService _documentProcessor;
+    private readonly IEmbeddingService _embeddingService;
 
-    public RagController(IRagService ragService, IDocumentProcessorService documentProcessor)
+    public RagController(
+        IRagService ragService,
+        IDocumentProcessorService documentProcessor,
+        IEmbeddingService embeddingService)
     {
         _ragService = ragService;
         _documentProcessor = documentProcessor;
+        _embeddingService = embeddingService;
     }
 
-    /// <summary>
-    /// Permite guardar un fragmento individual a mano.
-    /// </summary>
     [HttpPost("chunk")]
     public async Task<IActionResult> SaveChunk([FromBody] DocumentChunk chunk)
     {
@@ -28,10 +30,6 @@ public class RagController : ControllerBase
         return Ok(new { status = "Chunk guardado correctamente en MongoDB", id = chunk.Id });
     }
 
-    /// <summary>
-    /// Permite subir un archivo PDF real, extraer su texto, cortarlo en chunks
-    /// y guardarlos automáticamente en MongoDB.
-    /// </summary>
     [HttpPost("upload-pdf")]
     public async Task<IActionResult> UploadPdf(IFormFile file)
     {
@@ -41,12 +39,10 @@ public class RagController : ControllerBase
         if (!file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
             return BadRequest("El archivo subido debe tener extensión .pdf.");
 
-        // 1. Procesamos el PDF y lo cortamos en fragmentos (chunks)
         using var stream = file.OpenReadStream();
         var chunks = await _documentProcessor.ProcessPdfAsync(stream, file.FileName);
 
         int totalChunks = 0;
-        // 2. Guardamos cada fragmento en MongoDB
         foreach (var chunk in chunks)
         {
             await _ragService.SaveChunkAsync(chunk);
@@ -55,20 +51,27 @@ public class RagController : ControllerBase
 
         return Ok(new
         {
-            status = "PDF procesado e ingestado exitosamente",
+            status = "PDF procesado e ingestado exitosamente con Embeddings",
             fileName = file.FileName,
             totalChunksGuardados = totalChunks
         });
     }
 
     /// <summary>
-    /// Realiza una búsqueda de similitud simulada.
+    /// Realiza una búsqueda por similitud semántica (vectorial) según un texto.
     /// </summary>
     [HttpGet("search")]
-    public async Task<IActionResult> Search([FromQuery] int topK = 3)
+    public async Task<IActionResult> Search([FromQuery] string query, [FromQuery] int topK = 3)
     {
-        float[] vectorSimulado = new float[] { 0.1f, 0.4f, 0.8f, 0.2f };
-        var resultados = await _ragService.SearchSimilarChunksAsync(vectorSimulado, topK);
+        if (string.IsNullOrWhiteSpace(query))
+            return BadRequest("Ingresá un texto de consulta.");
+
+        // 1. Convertimos la consulta del usuario en un vector numérico (Embedding)
+        var queryVector = await _embeddingService.GenerateEmbeddingAsync(query);
+
+        // 2. Buscamos los chunks con mayor similitud coseno
+        var resultados = await _ragService.SearchSimilarChunksAsync(queryVector, topK);
+
         return Ok(resultados);
     }
 }

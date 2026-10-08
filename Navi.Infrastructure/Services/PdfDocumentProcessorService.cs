@@ -7,8 +7,15 @@ namespace Navi.Infrastructure.Services;
 
 public class PdfDocumentProcessorService : IDocumentProcessorService
 {
-    public Task<IEnumerable<DocumentChunk>> ProcessPdfAsync(Stream pdfStream, string fileName)
+    private readonly IEmbeddingService _embeddingService;
+
+    public PdfDocumentProcessorService(IEmbeddingService embeddingService)
     {
+        _embeddingService = embeddingService;
+    }
+    public async Task<IEnumerable<DocumentChunk>> ProcessPdfAsync(Stream pdfStream, string fileName)
+    {
+
         var chunks = new List<DocumentChunk>();
 
         // Abrimos el PDF desde el stream que nos envía la API
@@ -40,7 +47,7 @@ public class PdfDocumentProcessorService : IDocumentProcessorService
             }
         }
 
-        return Task.FromResult<IEnumerable<DocumentChunk>>(chunks);
+        return chunks;
     }
 
     /// <summary>
