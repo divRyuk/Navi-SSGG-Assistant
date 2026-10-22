@@ -1,0 +1,43 @@
+# Informe Técnico de Ingeniería: Proyecto NAVI
+
+**Sector:** Servicios Generales (SSGG)  
+**Autor:** Tomas Alvarez (Programa Primer Paso)  
+**Estado:** Sprint 0 / MVP Propuesto  
+
+---
+
+## 1. Visión General y Arquitectura
+**NAVI** es un asistente virtual diseñado bajo el paradigma **RAG (Retrieval-Augmented Generation)**. La solución busca descentralizar el conocimiento operativo del área de Servicios Generales procesando archivos no estructurados (PDFs, Excels) y conectando con el software de gestión interno (Jira/Confluence).
+
+La arquitectura se diseñó priorizando la seguridad (SecOps) y la velocidad:
+- **API Restful:** Construida en **.NET 8**, garantizando escalabilidad, tipado estricto y soporte corporativo.
+- **Procesamiento de Lenguaje (NLP):** Modelos open-source ejecutados localmente mediante **Ollama**, garantizando que ninguna normativa o dato operativo interno (infraestructura, compras, logística) salga de la red empresarial.
+- **Base de Datos:** **MongoDB** configurado como Vector Store para almacenar los embeddings semánticos de los manuales del sector.
+
+## 2. Flujo de Datos (Pipeline RAG)
+1. **Ingesta de Conocimiento (Data Ingestion):** 
+   Se escanean las normativas de SSGG, protocolos de compras internas y logística. El texto se fragmenta (chunking) preservando el contexto y se vectoriza usando el modelo de embeddings local (ej. `nomic-embed-text`).
+2. **Almacenamiento (Vector DB):** 
+   Los vectores generados se indexan en MongoDB.
+3. **Recuperación (Retrieval):** 
+   Cuando el usuario consulta desde el frontend (Teams/UI propia), la API convierte la pregunta en un vector y busca los fragmentos de documentación más cercanos espacialmente (similitud del coseno).
+4. **Generación (Generation):** 
+   El LLM local (ej. `llama3`) recibe la pregunta del usuario *junto* con los fragmentos de la documentación oficial recuperada para redactar una respuesta 100% precisa, evitando alucinaciones.
+
+## 3. Alcance Operativo (MVP - Sprint 0)
+El Producto Mínimo Viable (Sprint 0) se enfocará exclusivamente en:
+- Procesamiento y respuesta de consultas sobre el reglamento/manual de SSGG.
+- Centralización de información sobre gestión de infraestructura y logística interna.
+- Objetivo KPI: Reducción del 40% del ruido en el tablero de Jira originado por preguntas frecuentes de Nivel 0 que ya están documentadas.
+
+## 4. Requerimientos de Infraestructura (Despliegue)
+Para el paso a los entornos de Desarrollo y Staging, se requiere del área de Sistemas (I+D):
+- Servidor On-Premises (Linux/Windows) o contenedor Docker con al menos 16GB de RAM (para soportar la ejecución local del LLM).
+- Instancia activa de MongoDB para el almacenamiento vectorial.
+- Permisos de red para exponer los endpoints de Ollama (`:11434`) hacia la Web API.
+- Accesos (Personal Access Tokens - PAT) de lectura a la API de Jira y Confluence corporativos de SSGG.
+
+## 5. Próximos Pasos (I+D)
+- Revisión de la estructura en capas (Clean Architecture) del repositorio.
+- Validación de latencia en la generación de embeddings locales vs. Cloud.
+- Pruebas de integración del frontend (desarrollado en React/Tailwind) contra los endpoints expuestos en Swagger UI.
