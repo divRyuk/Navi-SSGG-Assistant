@@ -12,15 +12,18 @@ public class RagController : ControllerBase
     private readonly IRagService _ragService;
     private readonly IDocumentProcessorService _documentProcessor;
     private readonly IEmbeddingService _embeddingService;
+    private readonly ILlmService _llmService;
 
     public RagController(
         IRagService ragService,
         IDocumentProcessorService documentProcessor,
-        IEmbeddingService embeddingService)
+        IEmbeddingService embeddingService,
+        ILlmService llmService)
     {
         _ragService = ragService;
         _documentProcessor = documentProcessor;
         _embeddingService = embeddingService;
+        _llmService = llmService;
     }
 
     [HttpPost("chunk")]
@@ -57,21 +60,46 @@ public class RagController : ControllerBase
         });
     }
 
-    /// <summary>
-    /// Realiza una búsqueda por similitud semántica (vectorial) según un texto.
-    /// </summary>
     [HttpGet("search")]
-    public async Task<IActionResult> Search([FromQuery] string query, [FromQuery] int topK = 3)
+    public async Task<IActionResult> Search([FromQuery] string query, [FromQuery] int topK = 5)
     {
         if (string.IsNullOrWhiteSpace(query))
             return BadRequest("Ingresá un texto de consulta.");
 
-        // 1. Convertimos la consulta del usuario en un vector numérico (Embedding)
         var queryVector = await _embeddingService.GenerateEmbeddingAsync(query);
-
-        // 2. Buscamos los chunks con mayor similitud coseno
         var resultados = await _ragService.SearchSimilarChunksAsync(queryVector, topK);
 
         return Ok(resultados);
+    }
+
+    [HttpPost("ask")]
+    public async Task<IActionResult> Ask([FromBody] string query, [FromQuery] int topK = 2)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return BadRequest("Ingresá una pregunta válida.");
+
+        var queryVector = await _embeddingService.GenerateEmbeddingAsync(query);
+        var chunks = await _ragService.SearchSimilarChunksAsync(queryVector, topK);
+
+        if (!chunks.Any())
+        {
+            return Ok(new
+            {
+                question = query,
+                answer = "No encontré información relevante en los documentos procesados para responder a tu pregunta."
+            });
+        }
+
+        string context = string.Join("\n\n", chunks.Select(c => $"[{c.DocumentName} - {c.SectionTitle}]: {c.Content}"));
+
+        string prompt = $"Respondé en 2 oraciones basándote solo en esto:\n\n{context}\n\nPregunta: {query}";
+        string response = await _llmService.GenerateResponseAsync(prompt);
+
+        return Ok(new
+        {
+            question = query,
+            answer = response,
+            sourcesUsed = chunks.Select(c => new { c.DocumentName, c.SectionTitle, c.PageNumber })
+        });
     }
 }

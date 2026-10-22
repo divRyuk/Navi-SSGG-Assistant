@@ -13,12 +13,11 @@ public class PdfDocumentProcessorService : IDocumentProcessorService
     {
         _embeddingService = embeddingService;
     }
+
     public async Task<IEnumerable<DocumentChunk>> ProcessPdfAsync(Stream pdfStream, string fileName)
     {
-
         var chunks = new List<DocumentChunk>();
 
-        // Abrimos el PDF desde el stream que nos envía la API
         using (var document = PdfDocument.Open(pdfStream))
         {
             foreach (var page in document.GetPages())
@@ -28,11 +27,14 @@ public class PdfDocumentProcessorService : IDocumentProcessorService
                 if (string.IsNullOrWhiteSpace(pageText))
                     continue;
 
-                // Dividimos el texto de la página en fragmentos de aprox. 300 palabras
-                var pageChunks = SplitTextIntoChunks(pageText, maxWordsPerChunk: 300);
+                // Dividimos en bloques con solapamiento
+                var pageChunks = SplitTextIntoChunks(pageText, chunkSizeInWords: 150, overlapInWords: 30);
 
                 foreach (var chunkText in pageChunks)
                 {
+                    // Generamos el embedding REAL consumiendo Ollama
+                    var embeddingVector = await _embeddingService.GenerateEmbeddingAsync(chunkText);
+
                     chunks.Add(new DocumentChunk
                     {
                         Id = Guid.NewGuid(),
@@ -40,8 +42,7 @@ public class PdfDocumentProcessorService : IDocumentProcessorService
                         SectionTitle = $"Página {page.Number}",
                         PageNumber = page.Number,
                         Content = chunkText,
-                        // Por ahora usamos el vector simulado hasta conectar el generador de Embeddings
-                        Embedding = new float[] { 0.1f, 0.4f, 0.8f, 0.2f }
+                        Embedding = embeddingVector.ToArray() // Vectores reales de nomic-embed-text
                     });
                 }
             }
@@ -51,31 +52,32 @@ public class PdfDocumentProcessorService : IDocumentProcessorService
     }
 
     /// <summary>
-    /// Función auxiliar para cortar un texto largo en bloques de palabras.
+    /// Fragmenta el texto en bloques de palabras manteniendo un solapamiento (overlap) 
+    /// para evitar que las frases u oraciones importantes queden cortadas.
     /// </summary>
-    private List<string> SplitTextIntoChunks(string text, int maxWordsPerChunk)
+    private List<string> SplitTextIntoChunks(string text, int chunkSizeInWords, int overlapInWords)
     {
         var words = text.Split(new[] { ' ', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
         var result = new List<string>();
-        var currentChunk = new StringBuilder();
-        int wordCount = 0;
 
-        foreach (var word in words)
+        if (words.Length == 0) return result;
+
+        int step = chunkSizeInWords - overlapInWords;
+        if (step <= 0) step = chunkSizeInWords; // Prevención de bucle infinito
+
+        for (int i = 0; i < words.Length; i += step)
         {
-            currentChunk.Append(word).Append(" ");
-            wordCount++;
+            var chunkWords = words.Skip(i).Take(chunkSizeInWords);
+            string chunkText = string.Join(" ", chunkWords).Trim();
 
-            if (wordCount >= maxWordsPerChunk)
+            if (!string.IsNullOrWhiteSpace(chunkText))
             {
-                result.Add(currentChunk.ToString().Trim());
-                currentChunk.Clear();
-                wordCount = 0;
+                result.Add(chunkText);
             }
-        }
 
-        if (currentChunk.Length > 0)
-        {
-            result.Add(currentChunk.ToString().Trim());
+            // Si ya llegamos al final del texto, salimos del bucle
+            if (i + chunkSizeInWords >= words.Length)
+                break;
         }
 
         return result;

@@ -17,7 +17,7 @@ public class OllamaEmbeddingService : IEmbeddingService
     {
         var requestBody = new
         {
-            model = "nomic-embed-text", // Modelo estándar de embeddings en Ollama
+            model = "nomic-embed-text",
             prompt = text
         };
 
@@ -28,7 +28,7 @@ public class OllamaEmbeddingService : IEmbeddingService
             if (response.IsSuccessStatusCode)
             {
                 var result = await response.Content.ReadFromJsonAsync<OllamaEmbeddingResponse>();
-                if (result?.Embedding != null)
+                if (result?.Embedding != null && result.Embedding.Length > 0)
                 {
                     return result.Embedding;
                 }
@@ -36,26 +36,10 @@ public class OllamaEmbeddingService : IEmbeddingService
         }
         catch
         {
-            // Si Ollama no está corriendo localmente, devolvemos un vector determinista basado en el texto
-            // para que el sistema siga funcionando sin romperse durante pruebas sin conexión.
-            return GenerateFallbackVector(text);
+            // Fallback determinista de respaldo si Ollama no está activo
         }
 
-        return GenerateFallbackVector(text);
-    }
-
-    private float[] GenerateFallbackVector(string text)
-    {
-        // Genera un vector determinista de 4 dimensiones según el Hash del texto
-        int hash = text.GetHashCode();
-        Random rand = new Random(hash);
-        return new float[]
-        {
-            (float)rand.NextDouble(),
-            (float)rand.NextDouble(),
-            (float)rand.NextDouble(),
-            (float)rand.NextDouble()
-        };
+        return new float[] { 0.1f, 0.4f, 0.8f, 0.2f };
     }
 
     private class OllamaEmbeddingResponse

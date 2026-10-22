@@ -24,5 +24,10 @@ namespace Navi.Infrastructure.Services
 
             return Task.FromResult(respuestaRedactada);
         }
+
+        public Task<string> GenerateResponseAsync(string systemPrompt)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
